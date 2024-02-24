@@ -1,0 +1,49 @@
+version: "3"
+services:
+  broker:
+    image: redis:7.2-alpine
+    hostname: broker
+    ports:
+      - 6379:6379
+
+  producer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: uvicorn api.main:app --host 0.0.0.0 --port 8080 --reload
+    ports:
+      - 8080:8080
+    volumes:
+      - ./api:/app/api
+      - ./background:/app/background
+    env_file:
+      - .env
+    depends_on:
+      - broker
+      - consumer
+
+  consumer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery --app background.task.executor worker --loglevel=info
+    volumes:
+      - ./background:/app/background
+    env_file:
+      - .env
+    depends_on:
+      - broker
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery --app background.task.executor flower --port=5555 --broker=redis://broker:6379/0
+    ports:
+      - 5556:5555
+    volumes:
+      - ./background:/app/background
+    env_file:
+      - .env
+    depends_on:
+      - broker
